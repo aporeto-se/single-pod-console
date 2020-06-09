@@ -1,0 +1,100 @@
+# Settings related to console
+console:
+  # [Required] The aporeto console url
+  # This is the url you will use to reach the Aporeto control plane
+  # Example: console.aporeto.com
+  url: https://localhost
+  # [Optional] To set the console api url
+  # By default it is console.url on port 1443
+  # If set the api will listen on that url instead (you can set the port, default to 443)
+  api:
+  # [Optional] The aporeto license to use for the url set above
+  # If not set a trial license limited to 2 enforcers will be used
+  license:
+  # [Optional] The kubernetes secret name that contains the certificates to use
+  certificates:
+  # [Optional] Used to pass custom settings as a configmap name
+  custom_env:
+  # [Advanced] Set the encryption_key to encrypt secrets on the storage
+  # If not set the default one is used
+  encryption_key:
+
+# [required] Set the storage class for the volumes
+# Note: If backup are enabled it will use the same values
+storage:
+  # Kubernetes storage class (fast prefered)
+  class: "none"
+  # Size in GB
+  size: 500
+
+
+networking:
+  # [Optional] The networking type to use
+  # serviceType can be LoadBalancer, NodePort or ClusterIP
+  # Default is ClusterIP
+  serviceType: NodePort
+  # [Optional] Use this to staticaly set the node port to use
+  nodePort:
+    apiPort:
+    consolePort:
+  # [Optional] Use this to staticaly set the loadbalancer ip to use
+  loadBalancer:
+    consoleIP:
+    apiIP:
+
+  # [Optional] proxy protocol support
+  proxyProtocol:
+    enabled: false
+    subnet: 10.0.0.0/8
+    mode: aws
+
+
+backup:
+  # [Optional] Backup schedule in a cron format
+  schedule: "0 0 * * *"
+
+# [Optional] Apps section for 3rd party integration
+apps:
+  # To set the namespace where the app will be deployed
+  # Default is te same namespace where the console is
+  namespace:
+  # Use a different docker registry tahn the
+  # imageRegistry set below
+  imageRegistry:
+  # Path to the helm repository to use
+  # By default points to the default one
+  helmRepository:
+  # Use node Affinity if needed for the 3rd party apps
+  nodeAffinity:
+    required: false
+    tag:
+
+# [Optional] prometheus service monitor
+# Deploy a serviceMonitor for console
+prometheus:
+  enabled: false
+
+
+# [Optional] Use an imagePullSecret secret name
+imagePullSecret:
+
+# [Optional] Set the image registry to use to pull the image
+imageRegistry: docker.io/aporeto
+
+# [Optional] Use node affinity if needed
+nodeAffinity:
+  enabled: false
+  mode: required
+  key: type
+  operator: In
+  value: console
+
+# [Optional] Use resources limits if needed
+resources:
+  enabled: false
+  requests:
+    memory: "8Gi"
+    cpu: "8000m"
+  limits:
+    memory: "32Gi"
+    cpu: "20000m"

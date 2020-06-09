@@ -1,0 +1,169 @@
+##########################################################
+
+Thank you for installing {{ .Chart.Name }}.
+
+Your release is named {{ .Release.Name }}.
+
+You should then be able to access the Aporeto Console via
+    {{ .Values.console.url }}
+
+And download the Certificate Authority via
+{{- if .Values.console.api }}
+    {{ .Values.console.api }}/_meta/ca
+{{- else }}
+    {{ .Values.console.url }}:1443/_meta/ca
+{{- end }}
+
+##########################################################
+
+If not, make sure that:
+
+{{- if eq .Values.networking.serviceType "LoadBalancer" }}
+      {{- if .Values.networking.loadBalancer.consoleIP }}
+        {{- if ne .Values.networking.loadBalancer.consoleIP .Values.console.url }}
+
+- {{ .Values.console.url }} is pointing to {{ .Values.networking.loadBalancer.consoleIP }}.
+        {{- end }}
+      {{- else }}
+
+- {{ .Values.console.url }} is pointing to the console LoadBalancer endpoint.
+      {{- end }}
+      {{- if .Values.networking.loadBalancer.apiIP }}
+        {{- if ne .Values.networking.loadBalancer.apiIP .Values.console.api }}
+- {{ .Values.console.api }} is pointing to {{ .Values.networking.loadBalancer.apiIP }}.
+        {{- end }}
+      {{- else }}
+      {{- if .Values.console.api }}
+- {{ .Values.console.api }} is pointing to the api LoadBalancer endpoint.
+      {{- end }}
+      {{- end }}
+
+You can retrieve the console external endpoint via
+
+kubectl -n {{ .Release.Namespace }} get service -lapp=console
+
+NOTE: It may take a few minutes for the LoadBalancer public IP to be available!
+{{- else if eq .Values.networking.serviceType "NodePort" }}
+
+- "console.url" (currently set to {{ .Values.console.url }})
+  {{- if .Values.console.api }}
+- "console.api" (currently set to {{ .Values.console.api }})
+  {{- end }}
+
+Ends with the nodePort and points to the node holding the pod.
+
+You can retrieve:
+
+- the node external ip
+- the console ui nodePort
+- the console api nodePort
+
+Via:
+
+# Get the node external ip
+kubectl get node $(kubectl -n {{ .Release.Namespace }} get pod console-0 -o jsonpath='{.spec.nodeName}') -o jsonpath='{.status.addresses[1].address}'
+
+# Get the console web port
+kubectl -n {{ .Release.Namespace }} get service console -o jsonpath='{.spec.ports[0].nodePort}'
+
+# Get the console api port
+kubeclt -n {{ .Release.Namespace }} get service console -o jsonpath='{.spec.ports[1].nodePort}'
+
+{{- else }}
+
+- {{ .Values.console.url }} is pointing to your ingress controler.
+  {{- if .Values.console.api }}
+- {{ .Values.console.api }} is pointing to your ingress controler.
+  {{- end }}
+
+And that your ingress controler is performing:
+- SSL passthrough (the SSL termination cannot be done at the ingress controller edge)
+- the web interface path point to service name "console": , port: 443
+{{- if .Values.console.api }}
+- the api path point to service name: "console-api" , port: 443
+{{- else }}
+- the api path point to service name: "console" , port: 1443
+{{- end }}
+{{- end }}
+
+You can update the value of:
+
+- the "console.url" (currently set to {{ .Values.console.url }})
+{{- if .Values.console.api }}
+- the "console.api" (currently set to {{ .Values.console.api }})
+{{- end }}
+
+By upgrading the release.
+{{- if eq .Values.networking.serviceType "LoadBalancer" }}
+
+For instance you want to configure your deployement to point to the current loadbalancer adddress, just run:
+
+{{- if .Values.console.api }}
+
+WEB_LB=$(kubectl -n {{ .Release.Namespace }} get service console -o jsonpath="{.status.loadBalancer.ingress[0]['address','ip','hostname']}")
+UI_LB=$(kubectl -n {{ .Release.Namespace }} get service console-api -o jsonpath="{.status.loadBalancer.ingress[0]['address','ip','hostname']}")
+
+: "${WEB_LB:?Variable not set or empty}"
+: "${UI_LB:?Variable not set or empty}"
+
+helm upgrade \
+  -n {{ .Release.Namespace }} \
+  {{ .Release.Name }} \
+  aporeto/console \
+  --reuse-values \
+  --set console.url=https://$WEB_LB \
+  --set console.api=https://$UI_LB \
+  --description "Updating console endpoints"
+
+{{- else }}
+
+CONSOLE_LB=$(kubectl -n {{ .Release.Namespace }} get service console -o jsonpath="{.status.loadBalancer.ingress[0]['address','ip','hostname']}")
+
+: "${CONSOLE_LB:?Variable not set or empty}"
+
+helm upgrade \
+  -n {{ .Release.Namespace }} \
+  {{ .Release.Name }} \
+  aporeto/console \
+  --reuse-values \
+  --set console.url=https://$CONSOLE_LB \
+  --description "Updating console endpoints"
+
+{{-  end}}
+
+{{- else if eq .Values.networking.serviceType "NodePort" }}
+
+For instance if you want to configure your deployement to point to one node IP and current assigned ports, just run:
+
+NODE_IP=$(kubectl get node $(kubectl -n {{ .Release.Namespace }} get pod console-0 -o jsonpath='{.spec.nodeName}') -o jsonpath='{.status.addresses[1].address}')
+WEB_PORT=$(kubectl -n {{ .Release.Namespace }} get service console -o jsonpath='{.spec.ports[0].nodePort}')
+API_PORT=$(kubectl -n {{ .Release.Namespace }} get service console -o jsonpath='{.spec.ports[1].nodePort}')
+
+helm upgrade \
+  -n {{ .Release.Namespace }} \
+  {{ .Release.Name }} \
+  aporeto/console \
+  --reuse-values \
+  --set console.url=https://$NODE_IP:$WEB_PORT \
+  --set console.api=https://$NODE_IP:$API_PORT \
+  --description "Updating console endpoints"
+
+Note: This only works if you are targeting the host holding the pod to allow client source ip to not be spoofed by Kubernetes NAT.
+In that case it's recommanded to create a loadbalancer that target the node group with a health check done on the api port.
+It means that only the node holding the pod will be marked as active.
+{{- else }}
+
+helm upgrade \
+  -n {{ .Release.Namespace }} \
+  {{ .Release.Name }} \
+  aporeto/console \
+  --reuse-values \
+  --set console.url=https://<ingress_controller_url_for_console> \
+  {{- if .Values.console.api }}
+  --set console.url=https://<ingress_controller_url_for_api> \
+  {{- end }}
+  --description "Updating console endpoints"
+
+{{- end }}
+
+This will update the certificate and configuration.

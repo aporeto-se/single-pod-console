@@ -1,0 +1,147 @@
+{{- if and (.Values.console.api) (ne .Values.networking.serviceType "NodePort" )}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: console
+  labels:
+    app: console
+    type: aporeto
+spec:
+  type: {{ required "networking.serviceType" .Values.networking.serviceType }}
+  selector:
+    app: console
+  {{- if and (eq .Values.networking.serviceType "LoadBalancer") .Values.networking.loadBalancer.consoleIP }}
+  loadBalancerIP: {{ .Values.networking.loadBalancer.consoleIP | quote }}
+  {{- end }}
+  {{- if or (eq .Values.networking.serviceType "LoadBalancer") (eq .Values.networking.serviceType "NodePort") }}
+  {{- if not .Values.networking.proxyProtocol.enabled }}
+  externalTrafficPolicy: Local
+  {{- end }}
+  {{- end }}
+  ports:
+    - name: ui
+      targetPort: 1443
+      {{- if and (eq .Values.networking.serviceType "NodePort") .Values.networking.nodePort.consolePort }}
+      nodePort: {{ .Values.networking.nodePort.consolePort }}
+      {{- else }}
+      port: 443
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: console-api
+  {{- if eq .Values.networking.serviceType "LoadBalancer" }}
+  annotations:
+    {{- if .Values.networking.proxyProtocol.enabled }}
+    {{- if eq .Values.networking.proxyProtocol.mode "aws" }}
+    "service.beta.kubernetes.io/aws-load-balancer-proxy-protocol": "*"
+    {{- end }}
+    {{- end }}
+  {{- end }}
+  labels:
+    app: console
+    type: aporeto
+spec:
+  type: {{ required "networking.serviceType" .Values.networking.serviceType }}
+  selector:
+    app: console
+  {{- if and (eq .Values.networking.serviceType "LoadBalancer") .Values.networking.loadBalancer.apiIP }}
+  loadBalancerIP: {{ .Values.networking.loadBalancer.apiIP | quote }}
+  {{- end }}
+  {{- if or (eq .Values.networking.serviceType "LoadBalancer") (eq .Values.networking.serviceType "NodePort") }}
+  {{- if not .Values.networking.proxyProtocol.enabled }}
+  externalTrafficPolicy: Local
+  {{- end }}
+  {{- end }}
+  ports:
+    - name: api
+      targetPort: 4443
+      {{- if and (eq .Values.networking.serviceType "NodePort") .Values.networking.nodePort.apiPort }}
+      nodePort: {{ .Values.networking.nodePort.apiPort }}
+      {{- else }}
+      port: 443
+      {{- end }}
+{{- else }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: console
+  {{- if eq .Values.networking.serviceType "LoadBalancer" }}
+  annotations:
+    {{- if .Values.networking.proxyProtocol.enabled }}
+    {{- if eq .Values.networking.proxyProtocol.mode "aws" }}
+    "service.beta.kubernetes.io/aws-load-balancer-proxy-protocol": "*"
+    {{- end }}
+    {{- end }}
+  {{- end }}
+  labels:
+    app: console
+    type: aporeto
+spec:
+  type: {{ required "networking.serviceType" .Values.networking.serviceType }}
+  selector:
+    app: console
+  {{- if and (eq .Values.networking.serviceType "LoadBalancer") .Values.networking.loadBalancer.consoleIP }}
+  loadBalancerIP: {{ .Values.networking.loadBalancer.consoleIP | quote }}
+  {{- end }}
+  {{- if or (eq .Values.networking.serviceType "LoadBalancer") (eq .Values.networking.serviceType "NodePort") }}
+  {{- if not .Values.networking.proxyProtocol.enabled }}
+  externalTrafficPolicy: Local
+  {{- end }}
+  {{- end }}
+  ports:
+    - name: ui
+      targetPort: 1443
+      {{- if and (eq .Values.networking.serviceType "NodePort") .Values.networking.nodePort.consolePort }}
+      nodePort: {{ .Values.networking.nodePort.consolePort }}
+      {{- else }}
+      port: 443
+      {{- end }}
+    - name: api
+      targetPort: 4443
+      {{- if and (eq .Values.networking.serviceType "NodePort") .Values.networking.nodePort.apiPort }}
+      nodePort: {{ .Values.networking.nodePort.apiPort }}
+      {{- else }}
+      port: 4443
+      {{- end }}
+{{- end }}
+{{- if .Values.prometheus.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: health-console
+  labels:
+    app: console
+    type: aporeto
+spec:
+  type:
+  selector:
+    app: console
+  clusterIP: None
+  ports:
+    - name: health
+      port: 1090
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: console
+  labels:
+    prometheus: aporeto
+spec:
+  targetLabels:
+    - type
+  selector:
+    matchLabels:
+      app: console
+  endpoints:
+    - port: health
+      relabelings:
+      - regex: health-(.*)
+        sourceLabels: [__meta_kubernetes_service_name]
+        targetLabel: service
+---
+{{- end }}

@@ -1,0 +1,6 @@
+apiVersion: v1
+appVersion: v1.1352.0
+description: Zero-trust container security solution
+icon: https://www.aporeto.com/wp-content/uploads/2019/07/aporeto-logo-new-header.svg
+name: console
+version: v1.1352.0

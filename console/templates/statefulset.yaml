@@ -1,0 +1,190 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: console
+spec:
+  serviceName: console
+  replicas: 1
+  selector:
+    matchLabels:
+      app: console
+      type: aporeto
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: console
+        type: aporeto
+    spec:
+      serviceAccountName: aporeto-console
+      {{- if .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{.Values.imagePullSecret }}
+      {{- end }}
+      terminationGracePeriodSeconds: 240
+      affinity:
+        {{- if .Values.nodeAffinity.enabled }}
+        nodeAffinity:
+          {{- if eq .Values.nodeAffinity.mode "required" }}
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: {{ .Values.nodeAffinity.key | quote }}
+                  operator: {{ .Values.nodeAffinity.operator }}
+                  values:
+                    - {{ .Values.nodeAffinity.value | quote }}
+          {{- else }}
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              preference:
+                matchExpressions:
+                  - key: {{ .Values.nodeAffinity.key | quote }}
+                    operator: {{ .Values.nodeAffinity.operator }}
+                    values:
+                      - {{ .Values.nodeAffinity.value | quote }}
+          {{- end }}
+        {{- end }}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - {{ .Chart.Name | lower }}
+      containers:
+        - name: console
+          image: {{ required "imageRegistry is required" .Values.imageRegistry }}/console:{{ or .Values.backendTag .Chart.AppVersion }}
+          imagePullPolicy: Always
+
+          {{- if .Values.resources.enabled }}
+          resources:
+            {{- if .Values.resources.requests }}
+            requests:
+              {{- if .Values.resources.requests.memory }}
+              memory: {{ .Values.resources.requests.memory | quote }}
+              {{- end }}
+              {{- if .Values.resources.requests.cpu }}
+              cpu: {{ .Values.resources.requests.cpu | quote }}
+              {{- end }}
+            {{- end }}
+            {{- if .Values.resources.limits }}
+            limits:
+              {{- if .Values.resources.limits.memory }}
+              memory: {{ .Values.resources.limits.memory | quote }}
+              {{- end }}
+              {{- if .Values.resources.limits.cpu }}
+              cpu: {{ .Values.resources.limits.cpu | quote }}
+              {{- end }}
+            {{- end }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 1090
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 1090
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          env:
+            - name: APORETO_CONSOLE_URL
+              value: {{ required "console.url is required" .Values.console.url | quote }}
+            {{- if .Values.console.api }}
+            - name: APORETO_API_URL
+              value: {{ .Values.console.api }}
+            {{- end }}
+            {{- if .Values.console.license }}
+            - name: APORETO_LICENSE
+              value: {{ .Values.console.license }}
+            {{- end }}
+            {{- if .Values.console.encryption_key }}
+            - name: APORETO_ENCRYPTION_KEY
+              value: {{ .Values.console.encryption_key }}
+            {{- end }}
+            - name: BACKUP_SCHEDULE
+              value: {{ .Values.backup.schedule }}
+            {{- if .Values.networking.proxyProtocol.enabled}}
+            - name: WUTAI_PROXY_PROTOCOL_ENABLED
+              value: "true"
+            - name: WUTAI_PROXY_PROTOCOL_SUBNET
+              value: "{{ .Values.networking.proxyProtocol.subnet }}"
+            {{- end}}
+            - name: HIGHWIND_CONTROLLER_TYPE
+              value: "kubernetes"
+            - name: HIGHWIND_K8S_NAMESPACE
+              value: {{.Values.apps.namespace | default .Release.Namespace | quote}}
+            - name: HIGHWIND_DOCKER_REGISTRY
+              value: {{ .Values.apps.imageRegistry | default .Values.imageRegistry | quote }}
+            {{- if .Values.apps.helmRepository }}
+            - name: HIGHWIND_HELM_REPOSITORY
+              value: {{ .Values.apps.helmRepository | quote }}
+            {{- end }}
+            {{- if .Values.apps.nodeAffinity.required }}
+            - name: HIGHWIND_NODE_AFFINITY_REQUIRED
+              value: "true"
+            {{- end }}
+            {{- if .Values.apps.nodeAffinity.tag }}
+            - name: HIGHWIND_NODE_AFFINITY_TAG
+              value: {{ .Values.apps.nodeAffinity.tag | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /aporeto-data
+            - name: backup
+              mountPath: /backup
+            {{- if .Values.console.certificates }}
+            - name: certificates
+              mountPath: /custom-certs
+            {{- end }}
+            {{- if .Values.console.custom_env }}
+            - name: custom-env
+              mountPath: /custom-env
+            {{- end }}
+
+      volumes:
+        {{ if eq .Values.storage.class "none" }}
+        - name: data
+          emptyDir: {}
+        - name: backup
+          emptyDir: {}
+        {{ end }}
+        {{- if .Values.console.certificates }}
+        - name: certificates
+          secret:
+            secretName: {{ .Values.console.certificates }}
+        {{- end }}
+        {{- if .Values.console.custom_env }}
+        - name: custom-env
+          configMap:
+            name: {{ .Values.console.custom_env }}
+        {{- end }}
+
+{{ if ne .Values.storage.class "none" }}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      storageClassName: "{{ .Values.storage.class }}"
+      accessModes:
+        - "ReadWriteOnce"
+      resources:
+        requests:
+          storage: "{{ .Values.storage.size }}Gi"
+  - metadata:
+      name: backup
+    spec:
+      storageClassName: "{{ .Values.storage.class }}"
+      accessModes:
+        - "ReadWriteOnce"
+      resources:
+        requests:
+          storage: "{{ .Values.storage.size }}Gi"
+{{ end }}
