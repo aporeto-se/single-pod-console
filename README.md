@@ -41,12 +41,14 @@ First, create a docker image secret in the namespace you are deploying the conso
 
 Example below uses GCP service account with json key file. The key has a long lifespan, but requires the ability to create an IAM service account and generate keys in the GCP project.
 
+```bash
 kubectl create secret docker-registry docker-registry-secret\
   -n aporeto-console \
   --docker-server=https://gcr.io/aporetopm \
   --docker-username=_json_key \
   --docker-email=my.aporetoemail@aporeto.com \
   --docker-password="$(cat ~/key.json)"
+```
 
 Next, deploy the helm chart
 

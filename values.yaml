@@ -1,8 +1,0 @@
-console:
-  url: https://34.71.55.211
-imagePullSecret: docker-registry-secret
-imageRegistry: gcr.io/aporetopm
-networking:
-  serviceType: LoadBalancer
-storage:
-  class: standard
