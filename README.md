@@ -37,28 +37,13 @@ If you have already added the Helm repo, update it regularly
 
 ### Deploying Aporeto console
 
-First, create a docker image secret in the namespace you are deploying the console.
-
-Example below uses GCP service account with json key file. The key has a long lifespan, but requires the ability to create an IAM service account and generate keys in the GCP project.
-
-```bash
-kubectl create secret docker-registry docker-registry-secret\
-  -n aporeto-console \
-  --docker-server=https://gcr.io/aporetopm \
-  --docker-username=_json_key \
-  --docker-email=my.aporetoemail@aporeto.com \
-  --docker-password="$(cat ~/key.json)"
-```
-
-Next, deploy the helm chart
+Deploy the helm chart
 
 ```bash
 helm install console aporeto/console  -n aporeto-console \
-  --set imageRegistry=gcr.io/aporetopm \
+  --set console.url=https://demo.prismacloud.us \
   --set storage.class=standard \
   --set networking.serviceType=LoadBalancer\
-  --set imagePullSecret=docker-registry-secret
-
 ```
 
 Note: `console.url` can be updated afterward as explained in the note once deployed.
